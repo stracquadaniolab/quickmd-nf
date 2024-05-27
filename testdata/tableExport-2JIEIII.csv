@@ -1,0 +1,7 @@
+ID,"Protein Name",Mutation,PDB,T,pH,Method,Measure,ΔΔG,ΔTm,Reference
+13158,"Beta-glucosidase B",N223Y,2JIE,298.15,7.5,Thermal,"PTS, Fluorescence",-5.73,3.79,"PMID: 32258884"
+13159,"Beta-glucosidase B",E167A,2JIE,298.15,7.5,Thermal,"PTS, Fluorescence",-4.25,8.28,"PMID: 32258884"
+13160,"Beta-glucosidase B",N223R,2JIE,298.15,7.5,Thermal,"PTS, Fluorescence",-3.98,1.57,"PMID: 32258884"
+13161,"Beta-glucosidase B",N223G,2JIE,298.15,7.5,Thermal,"PTS, Fluorescence",-3.46,2.25,"PMID: 32258884"
+13162,"Beta-glucosidase B",T221A,2JIE,298.15,7.5,Thermal,"PTS, Fluorescence",-3.19,2.06,"PMID: 32258884"
+13163,"Beta-glucosidase B",C170A,2JIE,298.15,7.5,Thermal,"PTS, Fluorescence",-3.00,7.35,"PMID: 32258884"
