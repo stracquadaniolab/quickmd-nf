@@ -87,8 +87,18 @@ def setup_modeller(pdb):
     return modeller
 
 def setup_system(modeller, forcefield, solvmol: str, no_restraints: bool):
-    mol=int(solvmol)
-    modeller.addSolvent(forcefield, numAdded=mol)
+    Natoms=int(solvmol)
+    temp = 300
+    Rgas = 8.205736608e-5
+    Na = 6.02214076e23
+    Nmol = Natoms/Na
+    p = 1.0
+    Vol = (Nmol*Rgas*temp)/p
+    x = Vol**(1./3.)
+    y = Vol**(1./3.)
+    z = Vol**(1./3.)
+    modeller.topology.setUnitCellDimensions((x, y, z))
+    modeller.addSolvent(forcefield, numAdded=Natoms)
     system = forcefield.createSystem(modeller.topology, nonbondedMethod=PME, nonbondedCutoff=1.0*nanometer, constraints=HBonds)
     if not no_restraints:
         logging.info("Using restraints on backbone")
@@ -105,7 +115,8 @@ def setup_simulation(modeller, system):
 
 def energy_minimization(modeller):
     forcefield = setup_forcefield()
-    system = setup_system(modeller, forcefield, arguments['--no_restraints'])
+    solvmol = 3000
+    system = setup_system(modeller, forcefield, solvmol, arguments['--no_restraints'])
     simulation = setup_simulation(modeller, system)
     init_state = simulation.context.getState(getEnergy=True, getPositions=True)
     logging.info("Starting potential energy = %.9f kcal/mol"
