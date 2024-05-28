@@ -85,6 +85,7 @@ def setup_forcefield():
     return forcefield
 
 def setup_modeller(pdb):
+    pdb = app.PDBFile(pdb)
     modeller = app.Modeller(pdb.topology, pdb.positions)
     return modeller
 
@@ -176,8 +177,9 @@ def main():
     new_rep_cleaned = get_data(arguments['--incsv'], arguments['--from-col'])
     reformat_data(arguments['--incsv'], new_rep_cleaned)
     pdb = clean_wildtype(arguments['--in-pdb'], arguments['--pH'])
+    modeller = setup_modeller(pdb)
     for j in range(1,2):
-        wt_pdb = energy_minimization(pdb)
+        wt_pdb = energy_minimization(modeller)
         strj = str(j)
         wt_out = str("wt_minimised" + strj + ".pdb")
         app.PDBFile.writeFile(wt_pdb[0], wt_pdb[1], open(wt_out, "w"), keepIds=True)
