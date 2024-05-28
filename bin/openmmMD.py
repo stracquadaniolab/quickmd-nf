@@ -25,9 +25,10 @@ import MDAnalysis as mda
 from MDAnalysis.analysis import rms, align
 from sys import stdout
 from pdbfixer import PDBFixer
-del PDBFixer.addSolvent
-from openmm.app import *
-from openmm import *
+import openmm.app as app
+import openmm as mm
+#from openmm.app import *
+#from openmm import *
 from openmm.unit import *
 
 def get_data(csvname: str, col: str):
@@ -61,7 +62,7 @@ def clean_wildtype(pdbname: str, pH: str):
     pdb.findMissingAtoms()
     pdb.addMissingAtoms()
     pdb.addMissingHydrogens(pH_fl)
-    PDBFile.writeFile(pdb.topology, pdb.positions, open("wildtype_fixed.pdb", 'w'), keepIds=True)
+    app.PDBFile.writeFile(pdb.topology, pdb.positions, open("wildtype_fixed.pdb", 'w'), keepIds=True)
     return pdb
 
 def create_mutants(pdbname: str, mutant, chain: str, pH: str):
@@ -76,15 +77,15 @@ def create_mutants(pdbname: str, mutant, chain: str, pH: str):
     mutpdb.findMissingAtoms()
     mutpdb.addMissingAtoms()
     mutpdb.addMissingHydrogens(pH_fl)
-    PDBFile.writeFile(mutpdb.topology, mutpdb.positions, open(mutant + "_fixed.pdb", 'w'), keepIds=True)
+    app.PDBFile.writeFile(mutpdb.topology, mutpdb.positions, open(mutant + "_fixed.pdb", 'w'), keepIds=True)
     return mutpdb
 
 def setup_forcefield():
-    forcefield = ForceField('amber14-all.xml', 'amber14/tip3pfb.xml')
+    forcefield = app.ForceField('amber14-all.xml', 'amber14/tip3pfb.xml')
     return forcefield
 
 def setup_modeller(pdb):
-    modeller = Modeller(pdb.topology, pdb.positions)
+    modeller = app.Modeller(pdb.topology, pdb.positions)
     return modeller
 
 def setup_system(modeller, forcefield, solvmol: str, no_restraints: bool):
@@ -99,8 +100,8 @@ def setup_system(modeller, forcefield, solvmol: str, no_restraints: bool):
     y = Vol**(1./3.)
     z = Vol**(1./3.)
     modeller.topology.setUnitCellDimensions((x, y, z))
-    modeller.addSolvent(forcefield, numAdded = Natoms)
-    system = forcefield.createSystem(modeller.topology, nonbondedMethod=PME, nonbondedCutoff=1.0*nanometer, constraints=HBonds)
+    modeller.addSolvent(forcefield, numAdded=Natoms)
+    system = forcefield.createSystem(modeller.topology, nonbondedMethod=app.PME, nonbondedCutoff=1.0*nanometer, constraints=app.HBonds)
     if not no_restraints:
         logging.info("Using restraints on backbone")
         for atom in modeller.topology.atoms():
@@ -109,8 +110,8 @@ def setup_system(modeller, forcefield, solvmol: str, no_restraints: bool):
     return system
 
 def setup_simulation(modeller, system):
-    integrator = LangevinMiddleIntegrator(300*kelvin, 1/picosecond, 0.001*picoseconds)
-    simulation = Simulation(modeller.topology, system, integrator)
+    integrator = mm.LangevinMiddleIntegrator(300*kelvin, 1/picosecond, 0.001*picoseconds)
+    simulation = app.Simulation(modeller.topology, system, integrator)
     simulation.context.setPositions(modeller.positions)
     return simulation
 
@@ -132,12 +133,12 @@ def energy_minimization(modeller):
 def md_nvt(simulation, csvname: str, totalsteps: int, reprate: int, pdbname):
     init_state = simulation.context.getState(getEnergy=True, getPositions=True)
     init_pe = init_state.getPotentialEnergy().value_in_unit(kilocalories_per_mole)
-    simulation.reporters.append(PDBReporter(pdbname, reprate))
-    simulation.reporters.append(StateDataReporter(stdout, reprate, step=True, potentialEnergy=True, temperature=True, volume=True))
+    simulation.reporters.append(app.PDBReporter(pdbname, reprate))
+    simulation.reporters.append(app.StateDataReporter(stdout, reprate, step=True, potentialEnergy=True, temperature=True, volume=True))
     prepdf = {'Step':[], 'Potential Energy (kJ/mole)':[], 'Temperature (K)':[], 'Box Volume (nm^3)':[]}
     inidf = pd.DataFrame(prepdf)
     inidf.to_csv(csvname, index=False)
-    simulation.reporters.append(StateDataReporter(csvname, reprate, step=True,
+    simulation.reporters.append(app.StateDataReporter(csvname, reprate, step=True,
         potentialEnergy=True, temperature=True, volume=True, append=True))
     simulation.step(totalsteps)
     final_state = simulation.context.getState(getEnergy=True, getPositions=True)
@@ -179,13 +180,13 @@ def main():
         wt_pdb = energy_minimization(pdb)
         strj = str(j)
         wt_out = str("wt_minimised" + strj + ".pdb")
-        PDBFile.writeFile(wt_pdb[0], wt_pdb[1], open(wt_out, "w"), keepIds=True)
+        app.PDBFile.writeFile(wt_pdb[0], wt_pdb[1], open(wt_out, "w"), keepIds=True)
         simulation = wt_pdb[3]
         csvname = str("wt_traj" + strj + ".csv")
         pdbname = str("wt_traj" + strj + ".pdb")
         sim_run = md_nvt(simulation, csvname, 2000000, 10000, pdbname)
         wt_ref = str("wt_reference" + strj + ".pdb")
-        PDBFile.writeFile(sim_run[4], sim_run[5], open(wt_ref, "w"), keepIds=True)
+        app.PDBFile.writeFile(sim_run[4], sim_run[5], open(wt_ref, "w"), keepIds=True)
         rmsfout = str("wt_rmsf" + strj + ".csv")
         rmsf_analysis(pdbname, rmsfout)
 
