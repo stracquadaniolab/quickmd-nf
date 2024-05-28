@@ -103,11 +103,11 @@ def setup_system(modeller, forcefield, solvmol: str, no_restraints: bool):
     modeller.topology.setUnitCellDimensions((x, y, z))
     modeller.addSolvent(forcefield, numAdded=Natoms)
     system = forcefield.createSystem(modeller.topology, nonbondedMethod=app.PME, nonbondedCutoff=1.0*nanometer, constraints=app.HBonds)
-    if not no_restraints:
-        logging.info("Using restraints on backbone")
-        for atom in modeller.topology.atoms():
-            if atom.name in ["CA","C","N"]:
-                system.setParticleMass(atom.index, 0)
+    #if not no_restraints:
+    #    logging.info("Using restraints on backbone")
+    #    for atom in modeller.topology.atoms():
+    #        if atom.name in ["CA","C","N"]:
+    #            system.setParticleMass(atom.index, 0)
     return system
 
 def setup_simulation(modeller, system):
