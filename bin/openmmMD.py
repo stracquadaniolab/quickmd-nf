@@ -85,7 +85,7 @@ def setup_forcefield():
     return forcefield
 
 def setup_modeller(pdb):
-    pdb = app.PDBFile(pdb)
+    #pdb = app.PDBFile(pdb)
     modeller = app.Modeller(pdb.topology, pdb.positions)
     return modeller
 
