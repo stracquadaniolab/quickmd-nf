@@ -25,7 +25,7 @@ import MDAnalysis as mda
 from MDAnalysis.analysis import rms, align
 from sys import stdout
 from pdbfixer import PDBFixer
-del pdbfixer.addSolvent
+del PDBFixer.addSolvent
 from openmm.app import *
 from openmm import *
 from openmm.unit import *
