@@ -111,7 +111,7 @@ def setup_system(modeller, forcefield, solvmol: str, no_restraints: bool):
     return system
 
 def setup_simulation(modeller, system):
-    integrator = mm.LangevinMiddleIntegrator(300*kelvin, 1/picosecond, 0.001*picoseconds)
+    integrator = mm.LangevinMiddleIntegrator(300*kelvin, 1/picosecond, 0.0005*picoseconds)
     simulation = app.Simulation(modeller.topology, system, integrator)
     simulation.context.setPositions(modeller.positions)
     return simulation
