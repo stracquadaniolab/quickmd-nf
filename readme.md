@@ -1,6 +1,6 @@
 # quickmd-nf
 
-![](https://img.shields.io/badge/current_version-0.0.23-blue)
+![](https://img.shields.io/badge/current_version-0.0.24-blue)
 ![](https://github.com/stracquadaniolab/quickmd-nf/workflows/build/badge.svg)
 ## Overview
 A workflow to anperform molecular dynamics (MD) simulations and analysis of proteins in solution
