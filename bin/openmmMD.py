@@ -101,8 +101,8 @@ def setup_system(modeller, forcefield, solvmol: str, no_restraints: bool):
     y = Vol**(1./3.)
     z = Vol**(1./3.)
     #modeller.topology.setUnitCellDimensions((x, y, z))
-    #modeller.addSolvent(forcefield, padding=1.0*nanometers)
-    modeller.addSolvent(forcefield, numAdded=Natoms)
+    modeller.addSolvent(forcefield, padding=1.0*nanometers)
+    #modeller.addSolvent(forcefield, numAdded=Natoms)
     system = forcefield.createSystem(modeller.topology, nonbondedMethod=app.PME, nonbondedCutoff=1.0*nanometer, constraints=app.HBonds)
     #if not no_restraints:
     #    logging.info("Using restraints on backbone")
