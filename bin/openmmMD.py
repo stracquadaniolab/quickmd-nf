@@ -134,7 +134,7 @@ def energy_minimization(modeller):
 def md_nvt(simulation, csvname: str, totalsteps: int, reprate: int, pdbname):
     init_state = simulation.context.getState(getEnergy=True, getPositions=True)
     init_pe = init_state.getPotentialEnergy().value_in_unit(kilocalories_per_mole)
-    simulation.context.setVelocitiesToTemperature(300*unit.kelvin)
+    simulation.context.setVelocitiesToTemperature(300*kelvin)
     simulation.reporters.append(app.PDBReporter(pdbname, reprate))
     simulation.reporters.append(app.StateDataReporter(stdout, reprate, step=True, potentialEnergy=True, temperature=True, volume=True))
     prepdf = {'Step':[], 'Potential Energy (kJ/mole)':[], 'Temperature (K)':[], 'Box Volume (nm^3)':[]}
