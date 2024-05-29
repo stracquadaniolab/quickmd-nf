@@ -100,9 +100,9 @@ def setup_system(modeller, forcefield, solvmol: str, no_restraints: bool):
     x = Vol**(1./3.)
     y = Vol**(1./3.)
     z = Vol**(1./3.)
-    #modeller.topology.setUnitCellDimensions((x, y, z))
-    modeller.addSolvent(forcefield, padding=1.0*nanometers)
-    #modeller.addSolvent(forcefield, numAdded=Natoms)
+    modeller.topology.setUnitCellDimensions((x, y, z))
+    #modeller.addSolvent(forcefield, padding=1.0*nanometers)
+    modeller.addSolvent(forcefield, numAdded=Natoms)
     system = forcefield.createSystem(modeller.topology, nonbondedMethod=app.PME, nonbondedCutoff=1.0*nanometer, constraints=app.HBonds)
     #if not no_restraints:
     #    logging.info("Using restraints on backbone")
@@ -193,7 +193,7 @@ def main():
         integrator = wt_pdb[4]
         csvname = str("wt_traj" + strj + ".csv")
         pdbname = str("wt_traj" + strj + ".pdb")
-        sim_run = md_nvt(simulation, csvname, 2000000, 10000, pdbname, integrator)
+        sim_run = md_nvt(simulation, csvname, 200000, 10000, pdbname, integrator)
         wt_ref = str("wt_reference" + strj + ".pdb")
         app.PDBFile.writeFile(sim_run[4], sim_run[5], open(wt_ref, "w"), keepIds=True)
         rmsfout = str("wt_rmsf" + strj + ".csv")
