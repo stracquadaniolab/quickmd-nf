@@ -112,16 +112,17 @@ def setup_system(modeller, forcefield, solvmol: str, no_restraints: bool):
     return system
 
 def setup_simulation(modeller, system):
-    integrator = mm.LangevinMiddleIntegrator(150*kelvin, 1/picosecond, 0.001*picoseconds)
+    integrator = mm.LangevinMiddleIntegrator(10*kelvin, 1/picosecond, 0.001*picoseconds)
     simulation = app.Simulation(modeller.topology, system, integrator)
     simulation.context.setPositions(modeller.positions)
-    return simulation
+    return simulation, integrator
 
 def energy_minimization(modeller):
     forcefield = setup_forcefield()
     solvmol = 3000
     system = setup_system(modeller, forcefield, solvmol, arguments['--no_restraints'])
-    simulation = setup_simulation(modeller, system)
+    simulation = setup_simulation(modeller, system)[0]
+    integrator = setup_simulation(modeller, system)[1]
     init_state = simulation.context.getState(getEnergy=True, getPositions=True)
     logging.info("Starting potential energy = %.9f kcal/mol"
         % init_state.getPotentialEnergy().value_in_unit(kilocalories_per_mole))
@@ -130,12 +131,15 @@ def energy_minimization(modeller):
     logging.info("Starting potential energy = %.9f kcal/mol"
         % final_state.getPotentialEnergy().value_in_unit(kilocalories_per_mole))
     final_pe = final_state.getPotentialEnergy().value_in_unit(kilocalories_per_mole)
-    return simulation.topology, final_state.getPositions(), final_pe, simulation, 
+    return simulation.topology, final_state.getPositions(), final_pe, simulation, integrator
 
-def md_nvt(simulation, csvname: str, totalsteps: int, reprate: int, pdbname):
+def md_nvt(simulation, csvname: str, totalsteps: int, reprate: int, pdbname, integrator):
     init_state = simulation.context.getState(getEnergy=True, getPositions=True)
     init_pe = init_state.getPotentialEnergy().value_in_unit(kilocalories_per_mole)
-    simulation.context.setVelocitiesToTemperature(150*kelvin)
+    for temp in range(0, 300, 10):
+        integrator.setTemperature(temp*kelvin)
+        simulation.step(1000)
+    simulation.context.setVelocitiesToTemperature(temp*kelvin)
     simulation.reporters.append(app.PDBReporter(pdbname, reprate))
     simulation.reporters.append(app.StateDataReporter(stdout, reprate, step=True, potentialEnergy=True, temperature=True, volume=True))
     prepdf = {'Step':[], 'Potential Energy (kJ/mole)':[], 'Temperature (K)':[], 'Box Volume (nm^3)':[]}
@@ -186,9 +190,10 @@ def main():
         wt_out = str("wt_minimised" + strj + ".pdb")
         app.PDBFile.writeFile(wt_pdb[0], wt_pdb[1], open(wt_out, "w"), keepIds=True)
         simulation = wt_pdb[3]
+        integrator = wt_pdb[4]
         csvname = str("wt_traj" + strj + ".csv")
         pdbname = str("wt_traj" + strj + ".pdb")
-        sim_run = md_nvt(simulation, csvname, 2000000, 10000, pdbname)
+        sim_run = md_nvt(simulation, csvname, 2000000, 10000, pdbname, integrator)
         wt_ref = str("wt_reference" + strj + ".pdb")
         app.PDBFile.writeFile(sim_run[4], sim_run[5], open(wt_ref, "w"), keepIds=True)
         rmsfout = str("wt_rmsf" + strj + ".csv")
