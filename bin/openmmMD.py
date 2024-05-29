@@ -126,7 +126,7 @@ def energy_minimization(modeller):
     init_state = simulation.context.getState(getEnergy=True, getPositions=True)
     logging.info("Starting potential energy = %.9f kcal/mol"
         % init_state.getPotentialEnergy().value_in_unit(kilocalories_per_mole))
-    simulation.minimizeEnergy
+    simulation.minimizeEnergy()
     final_state = simulation.context.getState(getEnergy=True, getPositions=True)
     logging.info("Starting potential energy = %.9f kcal/mol"
         % final_state.getPotentialEnergy().value_in_unit(kilocalories_per_mole))
