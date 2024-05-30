@@ -116,7 +116,7 @@ def setup_simulation(modeller, system):
     #platform = mm.Platform.getPlatformByName('CUDA')
     simulation = app.Simulation(modeller.topology, system, integrator)
     simulation.context.setPositions(modeller.positions)
-    simulation.context.setPeriodicBoxVectors(*modeller.topology.getUnitCellVectors())
+    #simulation.context.setPeriodicBoxVectors(*modeller.topology.getUnitCellVectors())
     return simulation, integrator
 
 def energy_minimization(modeller):
@@ -148,7 +148,7 @@ def md_nvt(simulation, csvname: str, totalsteps: int, reprate: int, pdbname, int
     inidf = pd.DataFrame(prepdf)
     inidf.to_csv(csvname, index=False)
     simulation.reporters.append(app.StateDataReporter(csvname, reprate, step=True,
-        potentialEnergy=True, temperature=True, volume=True, pressure=True, append=True))
+        potentialEnergy=True, temperature=True, volume=True, density=True, pressure=True, append=True))
     simulation.step(totalsteps)
     final_state = simulation.context.getState(getEnergy=True, getPositions=True)
     final_pe = final_state.getPotentialEnergy().value_in_unit(kilocalories_per_mole)
