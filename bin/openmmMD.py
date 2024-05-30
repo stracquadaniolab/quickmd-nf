@@ -144,11 +144,11 @@ def md_nvt(simulation, csvname: str, totalsteps: int, reprate: int, pdbname, int
     simulation.context.setVelocitiesToTemperature(300*kelvin)
     simulation.reporters.append(app.PDBReporter(pdbname, reprate))
     simulation.reporters.append(app.StateDataReporter(stdout, reprate, step=True, potentialEnergy=True, temperature=True, volume=True))
-    prepdf = {'Step':[], 'Potential Energy (kJ/mole)':[], 'Temperature (K)':[], 'Box Volume (nm^3)':[], 'Pressure (kPa)':[]}
+    prepdf = {'Step':[], 'Potential Energy (kJ/mole)':[], 'Temperature (K)':[], 'Box Volume (nm^3)':[]}
     inidf = pd.DataFrame(prepdf)
     inidf.to_csv(csvname, index=False)
     simulation.reporters.append(app.StateDataReporter(csvname, reprate, step=True,
-        potentialEnergy=True, temperature=True, volume=True, density=True, pressure=True, append=True))
+        potentialEnergy=True, temperature=True, volume=True, append=True))
     simulation.step(totalsteps)
     final_state = simulation.context.getState(getEnergy=True, getPositions=True)
     final_pe = final_state.getPotentialEnergy().value_in_unit(kilocalories_per_mole)
