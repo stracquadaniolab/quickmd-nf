@@ -113,8 +113,10 @@ def setup_system(modeller, forcefield, solvmol: str, no_restraints: bool):
 
 def setup_simulation(modeller, system):
     integrator = mm.LangevinMiddleIntegrator(300*kelvin, 1/picosecond, 0.001*picoseconds)
+    #platform = mm.Platform.getPlatformByName('CUDA')
     simulation = app.Simulation(modeller.topology, system, integrator)
     simulation.context.setPositions(modeller.positions)
+    simulation.context.setPeriodicBoxVectors(*modeller.topology.getUnitCellVectors())
     return simulation, integrator
 
 def energy_minimization(modeller):
