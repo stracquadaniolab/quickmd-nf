@@ -142,11 +142,11 @@ def md_nvt(simulation, csvname: str, totalsteps: int, reprate: int, pdbname, int
     simulation.context.setVelocitiesToTemperature(300*kelvin)
     simulation.reporters.append(app.PDBReporter(pdbname, reprate))
     simulation.reporters.append(app.StateDataReporter(stdout, reprate, step=True, potentialEnergy=True, temperature=True, volume=True))
-    prepdf = {'Step':[], 'Potential Energy (kJ/mole)':[], 'Temperature (K)':[], 'Box Volume (nm^3)':[]}
+    prepdf = {'Step':[], 'Potential Energy (kJ/mole)':[], 'Temperature (K)':[], 'Box Volume (nm^3)':[], 'Pressure (kPa)':[]}
     inidf = pd.DataFrame(prepdf)
     inidf.to_csv(csvname, index=False)
     simulation.reporters.append(app.StateDataReporter(csvname, reprate, step=True,
-        potentialEnergy=True, temperature=True, volume=True, append=True))
+        potentialEnergy=True, temperature=True, volume=True, pressure=True, append=True))
     simulation.step(totalsteps)
     final_state = simulation.context.getState(getEnergy=True, getPositions=True)
     final_pe = final_state.getPotentialEnergy().value_in_unit(kilocalories_per_mole)
@@ -167,7 +167,7 @@ def md_nvt(simulation, csvname: str, totalsteps: int, reprate: int, pdbname, int
 
 def rmsf_analysis(pdb_traj: str, rmsfcsv: str):
     u = mda.Universe(pdb_traj)
-    u.trajectory.dt = 0.001
+    #u.trajectory.dt = 0.001
     average = align.AverageStructure(u, u, select='protein and name CA', ref_frame=0).run()
     ref = average.results.universe
     aligner = align.AlignTraj(u, ref, select='protein and name CA', in_memory=True).run()
@@ -177,6 +177,7 @@ def rmsf_analysis(pdb_traj: str, rmsfcsv: str):
     residue_names = [residue.resname for residue in c_alphas.residues]
     rmsf_values = R.rmsf
     df = pd.DataFrame({'Res_ID': residue_ids, 'Res_Name': residue_names, 'RMSF': rmsf_values })
+    print(df)
     df.to_csv(rmsfcsv, index=False)
 
 def main():
@@ -199,6 +200,21 @@ def main():
         app.PDBFile.writeFile(sim_run[4], sim_run[5], open(wt_ref, "w"), keepIds=True)
         rmsfout = str("wt_rmsf" + strj + ".csv")
         rmsf_analysis(pdbname, rmsfout)
+        for mutant in new_rep_cleaned.splitlines():
+            mutpdb = create_mutants(wt_out, mutant, arguments['--chain'], arguments['--pH'])
+            modeller = setup_modeller(mutpdb)
+            mut_pdb = energy_minimization(modeller)
+            mut_out = str(mutant + "_minimised" + strj + ".pdb")
+            app.PDBFile.writeFile(mut_pdb[0], mut_pdb[1], open(mut_out, "w"), keepIds=True)
+            simulation = mut_pdb[3]
+            integrator = mut_pdb[4]
+            csvname = str(mutant + "_traj" + strj + ".csv")
+            pdbname = str(mutant + "_traj" + strj + ".pdb")
+            sim_run = md_nvt(simulation, csvname, 10000, 1000, pdbname, integrator)
+            mut_ref = str(mutant + "reference" + strj + ".pdb")
+            app.PDBFile.writeFile(sim_run[4], sim_run[5], open(mut_ref, "w"), keepIds=True)
+            rmsfout = str(mutant + "_rmsf" + strj + ".csv")
+            rmsf_analysis(pdbname, rmsfout)
 
 if __name__ == '__main__':
     arguments = docopt(__doc__, version='openmmMD.py')
