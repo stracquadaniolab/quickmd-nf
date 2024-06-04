@@ -80,6 +80,18 @@ def create_mutants(pdbname: str, mutant, chain: str, pH: str):
     app.PDBFile.writeFile(mutpdb.topology, mutpdb.positions, open(mutant + "_fixed.pdb", 'w'), keepIds=True)
     return mutpdb
 
+def create_mutants_in_box(pdbname: str, mutant, chain: str, pH: str):
+    pH_fl = float(pH)
+    mutpdb = PDBFixer(pdbname)
+    mutpdb.applyMutations([mutant], chain)
+    mutpdb.missingResidues = {}
+    mutpdb.removeHeterogens(True)
+    mutpdb.findMissingAtoms()
+    mutpdb.addMissingAtoms()
+    mutpdb.addMissingHydrogens(pH_fl)
+    app.PDBFile.writeFile(mutpdb.topology, mutpdb.positions, open(mutant + "_fixed.pdb", 'w'), keepIds=True)
+    return mutpdb
+
 def setup_forcefield():
     forcefield = app.ForceField('amber14-all.xml', 'amber14/tip3pfb.xml')
     return forcefield
@@ -111,6 +123,10 @@ def setup_system(modeller, forcefield, solvmol: str, no_restraints: bool):
     #            system.setParticleMass(atom.index, 0)
     return system
 
+def setup_system_in_box(modeller, forcefield, solvmol: str, no_restraints: bool):
+    system = forcefield.createSystem(modeller.topology, nonbondedMethod=app.PME, nonbondedCutoff=1.0*nanometer, constraints=app.HBonds)
+    return system
+
 def setup_simulation(modeller, system):
     integrator = mm.LangevinMiddleIntegrator(300*kelvin, 1/picosecond, 0.001*picoseconds)
     #platform = mm.Platform.getPlatformByName('CUDA')
@@ -123,6 +139,21 @@ def energy_minimization(modeller):
     forcefield = setup_forcefield()
     solvmol = 500
     system = setup_system(modeller, forcefield, solvmol, arguments['--no_restraints'])
+    simulation = setup_simulation(modeller, system)[0]
+    integrator = setup_simulation(modeller, system)[1]
+    init_state = simulation.context.getState(getEnergy=True, getPositions=True)
+    logging.info("Starting potential energy = %.9f kcal/mol"
+        % init_state.getPotentialEnergy().value_in_unit(kilocalories_per_mole))
+    simulation.minimizeEnergy()
+    final_state = simulation.context.getState(getEnergy=True, getPositions=True)
+    logging.info("Starting potential energy = %.9f kcal/mol"
+        % final_state.getPotentialEnergy().value_in_unit(kilocalories_per_mole))
+    final_pe = final_state.getPotentialEnergy().value_in_unit(kilocalories_per_mole)
+    return simulation.topology, final_state.getPositions(), final_pe, simulation, integrator
+
+def energy_minimization_in_box(modeller):
+    forcefield = setup_forcefield()
+    system = setup_system_in_box(modeller, forcefield, arguments['--no_restraints'])
     simulation = setup_simulation(modeller, system)[0]
     integrator = setup_simulation(modeller, system)[1]
     init_state = simulation.context.getState(getEnergy=True, getPositions=True)
@@ -154,7 +185,7 @@ def md_nvt(simulation, csvname: str, totalsteps: int, reprate: int, pdbname, int
     final_pe = final_state.getPotentialEnergy().value_in_unit(kilocalories_per_mole)
     df = pd.read_csv(csvname)
     av_energy = df.loc[:, 'Potential Energy (kJ/mole)'].mean()
-    return init_pe, final_pe, av_energy, simulation, simulation.topology, init_state.getPositions()
+    return init_pe, final_pe, av_energy, simulation, simulation.topology, init_state.getPositions(), final_state.getPositions()
 
 #def rmsd_analysis(pdb_traj: str, pdb_ref: str):
 #    trajectory = md.load_pdb(pdb_traj)
@@ -200,12 +231,14 @@ def main():
         sim_run = md_nvt(simulation, csvname, 10000, 1000, pdbname, integrator)
         wt_ref = str("wt_reference" + strj + ".pdb")
         app.PDBFile.writeFile(sim_run[4], sim_run[5], open(wt_ref, "w"), keepIds=True)
+        wt_fin = str("wt_final" + strj + ".pdb")
+        app.PDBFile.writeFile(sim_run[4], sim_run[6], open(wt_fin, "w"), keepIds=True)
         rmsfout = str("wt_rmsf" + strj + ".csv")
         rmsf_analysis(pdbname, rmsfout)
         for mutant in new_rep_cleaned.splitlines():
-            mutpdb = create_mutants(wt_out, mutant, arguments['--chain'], arguments['--pH'])
+            mutpdb = create_mutants_in_box(wt_fin, mutant, arguments['--chain'], arguments['--pH'])
             modeller = setup_modeller(mutpdb)
-            mut_pdb = energy_minimization(modeller)
+            mut_pdb = energy_minimization_in_box(modeller)
             mut_out = str(mutant + "_minimised" + strj + ".pdb")
             app.PDBFile.writeFile(mut_pdb[0], mut_pdb[1], open(mut_out, "w"), keepIds=True)
             simulation = mut_pdb[3]
