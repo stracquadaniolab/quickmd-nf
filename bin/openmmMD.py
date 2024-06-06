@@ -123,7 +123,7 @@ def setup_system(modeller, forcefield, solvmol: str, no_restraints: bool):
     #            system.setParticleMass(atom.index, 0)
     return system
 
-def setup_system_in_box(modeller, forcefield, solvmol: str, no_restraints: bool):
+def setup_system_in_box(modeller, forcefield):
     system = forcefield.createSystem(modeller.topology, nonbondedMethod=app.PME, nonbondedCutoff=1.0*nanometer, constraints=app.HBonds)
     return system
 
@@ -153,7 +153,7 @@ def energy_minimization(modeller):
 
 def energy_minimization_in_box(modeller):
     forcefield = setup_forcefield()
-    system = setup_system_in_box(modeller, forcefield, arguments['--no_restraints'])
+    system = setup_system_in_box(modeller, forcefield)
     simulation = setup_simulation(modeller, system)[0]
     integrator = setup_simulation(modeller, system)[1]
     init_state = simulation.context.getState(getEnergy=True, getPositions=True)
