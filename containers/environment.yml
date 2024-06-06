@@ -14,3 +14,6 @@ dependencies:
   - matplotlib
   - pandas
   - mdanalysis
+  - r-docopt
+  - r-ggplot2
+  - r-dplyr

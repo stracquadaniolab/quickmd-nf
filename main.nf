@@ -23,6 +23,20 @@ process OpenmmMD {
     openmmMD.py --incsv $incsv --from-col ${params.csv.col} --in-pdb $inpdb ${params.mutant.maker.args}
     """
 }
+
+process PlotRMSF {
+    publishDir "${params.resultsDir}/plot_RMSF/", pattern: "*.png", mode: 'copy'
+    input:
+        path incsv
+    output:
+        path "*.png"
+        shell:
+        """
+        plot_rmsf.R --incsv $incsv
+        """
+}
+
+
 workflow {
     inpath_ch = channel.fromPath("${params.inputFile}")
     incsv_ch = channel.fromPath("${params.inputCsv}")
