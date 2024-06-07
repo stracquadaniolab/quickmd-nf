@@ -13,7 +13,6 @@ process OpenmmMD {
     output:
         path "*_fixed.pdb", emit: fixed_pdbs
         path "*_reformat.csv", emit: csv_reformat
-        path '*_minimsed.pdb', emit: minimised_pdbs
         path '*traj*.pdb', emit: traj_pdb
         path '*traj*.csv', emit: traj_csv
         path '*rmsf*.csv', emit: rmsf_csv
