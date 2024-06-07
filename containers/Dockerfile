@@ -22,7 +22,7 @@ LABEL org.opencontainers.image.documentation="https://github.com/stracquadaniola
 LABEL org.opencontainers.image.source="https://github.com/stracquadaniolab/quickmd-nf"
 LABEL org.opencontainers.image.vendor="stracquadaniolab"
 LABEL org.opencontainers.image.authors="Josh David Littlefair"
-LABEL org.opencontainers.image.revision="v0.0.32"
+LABEL org.opencontainers.image.revision="v0.0.33"
 
 COPY --chown=micromamba:micromamba ${CONDA_FILE} /tmp
 RUN micromamba install -y -n base -f /tmp/`basename ${CONDA_FILE}` && \
