@@ -5,3 +5,16 @@ logs/
 *.pyc
 .vscode
 .nextflow*
+results_2024-11-22/
+results-4.0_2024-11-07/
+results-4.0_2024-11-08_75K/
+results-4.0_2024-11-08_old/
+results-4.0_2024-11-09/
+results-4.0_2024-11-13/
+results-4.0_2024-11-14/
+results-4.0_2024-11-15/
+results-4.0pH_2024-08-23/
+results-4.0pH_2024-10-28/
+results-7.4pH_2024-09-02/
+results-7.4pH_2024-10-25/
+results-old/
