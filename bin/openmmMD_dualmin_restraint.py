@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""openmmMD_dualmin
+"""openmmMD_dualmin_restraint
 
 Minimise the potential energy of the wildtype protein structure and mutated variants, according to AMBER14 potentials 
 Usage:
-openmmMD_dualmin.py [--inpdb=<pdb>] [--pH=<pH>] [--steps=<steps>] [--report_every=<report_every>] [--init_steps=<init_steps>] [--no_restraints] 
+openmmMD_dualmin_restraint.py [--inpdb=<pdb>] [--pH=<pH>] [--steps=<steps>] [--report_every=<report_every>] [--init_steps=<init_steps>] [--relax_steps=<relax_steps>] [--relax_report_every=<relax_report_every>] [--no_restraints] 
 
 Options:
---inpdb=<pdb>                     Input PDB file of protein as obtained from previous process
---pH=<ph>                         Set pH of the protein
---steps=<steps>                   Number of steps in simulation proper after equilibriation
---report_every=<report_every>     Report every # steps to output PDB trajectory and energetic CSV file
---init_steps=<init_steps>         Initial steps of equilibration before reported trajectory 
---no_restraints                   Allow movement of all atoms
+--inpdb=<pdb>                               Input PDB file of protein as obtained from previous process
+--pH=<ph>                                   Set pH of the protein
+--steps=<steps>                             Number of steps in final simulation proper after equilibriation and relax, used for RMSF calculation
+--report_every=<report_every>               Report every # steps to final output PDB trajectory and energetic CSV file (CSV for whole reported trajectory)
+--init_steps=<init_steps>                   Initial steps of solvent equilibration (fixed protein backbone) before any reported trajectory 
+--relax_steps=<relax_steps>                 Initial reported trajectory steps focused on protein structure relax without restraints
+--relax_report_every=<relax_report_every>   Structure sampling rate of initial reported trajectory 
+--no_restraints                             Allow movement of all atoms
 """
 
 import logging
@@ -29,6 +31,7 @@ from pdbfixer import PDBFixer
 import openmm.app as app
 import openmm as mm
 from openmm.unit import *
+from openmm.app import element
 
 #Process to clean the original PDB, find missing atoms, remove heterogens and assign a protonation state to mimic selected pH, and output fixed PDB file
 def clean_pdb(pdbname: str, pH: str):
@@ -91,14 +94,40 @@ def setup_pdbfile(pdbfile):
     pdb = app.PDBFile(pdbfile)
     return pdb
 
-#integrate modeller and forcefied into a defined system. Before integration, solvent molecules are added to the box, with box vectors defined such that water density at a given pressure (normally standard pressure of 1atm) can be simulated.
-def setup_system(modeller, forcefield, solvmol: str, no_restraints: bool):
+#instate resraints on backbone atoms via rendering backbone massless
+def apply_mass_restraints(system, topology):
+    for atom in topology.atoms():
+        if atom.name in ["CA", "C", "N"]:
+            system.setParticleMass(atom.index, 0)
+
+#disengage restraints on backbone atoms via reinstating default atomic mass
+def remove_mass_restraints(system, topology):
+    for atom in topology.atoms():
+        if atom.name in ["CA", "C", "N"]:
+            element_mass = element.Element.getBySymbol(atom.element.symbol).mass
+            system.setParticleMass(atom.index, element_mass)
+
+
+#integrate modeller and forcefied into a defined system. Before integration, solvent molecules are added to the box, with box vectors defined such that water density at a given pressure (normally standard pressure of 1atm) can be simulated. Padding is added, with excess molecules removed to achieve 1atm density
+def setup_system(modeller, forcefield, solvmol: str, padding: int):
     Natoms=int(solvmol)
     xvec = mm.Vec3(11.70, 0.0, 0.0)
     yvec = mm.Vec3(0.0, 11.70, 0.0)
     zvec = mm.Vec3(0.0, 0.0, 11.70)
     modeller.topology.setPeriodicBoxVectors((xvec,yvec,zvec))
-    modeller.addSolvent(forcefield, numAdded=Natoms)
+    padding = padding * nanometer
+    modeller.addSolvent(forcefield, padding=padding)
+    water_molecules = []
+    for res in modeller.topology.residues():
+        if res.name == 'HOH':
+            water_molecules.append(res)
+    current_water_count = len(water_molecules)
+    excess_water_count = current_water_count - Natoms
+    if excess_water_count > 0:
+        residues_to_remove = water_molecules[:excess_water_count]
+        modeller.delete(residues_to_remove)
+    final_water_count = sum(1 for res in modeller.topology.residues() if res.name == 'HOH')
+    logging.info("Final water count = %d ", final_water_count)
     system = forcefield.createSystem(modeller.topology, nonbondedMethod=app.PME, nonbondedCutoff=1.0*nanometer, constraints=app.HBonds)
     #if not no_restraints:
     #    logging.info("Using restraints on backbone")
@@ -115,13 +144,16 @@ def setup_simulation(modeller, system):
     return simulation, integrator
 
 #Combine setup_forcefield and setup_system functions, redefine box vectors ahead of local minimisation. Output final minimised topology and mimimisation, and return simulation after minimisation 
-def energy_minimization(modeller, info_sheet):
+def energy_minimization(modeller, info_sheet, no_restraints: bool):
     forcefield = setup_forcefield()
     solvmol = 50000
-    system = setup_system(modeller, forcefield, solvmol, arguments['--no_restraints'])
+    padding = 1 #nanometer
+    system = setup_system(modeller, forcefield, solvmol, padding)
     xvec = mm.Vec3(11.70, 0.0, 0.0)
     yvec = mm.Vec3(0.0, 11.70, 0.0)
     zvec = mm.Vec3(0.0, 0.0, 11.70)
+    if not no_restraints:
+        apply_mass_restraints(system, modeller.topology)
     simulation = setup_simulation(modeller, system)[0]
     integrator = setup_simulation(modeller, system)[1]
     simulation.context.setPeriodicBoxVectors(xvec,yvec,zvec)
@@ -140,23 +172,27 @@ def energy_minimization(modeller, info_sheet):
     return simulation.topology, final_state.getPositions(), final_pe, simulation, integrator, system
 
 #Takes minimised solvation box to run grand canonical ensemble (NVT), with initial temperature increase in 100-step intervals. 0,5ns of equilibration is allowed to achieve equilibrium state. After which the requested number of steps is run, with reporting corresponding to the number of steps in the --report_every option
-def md_nvt(simulation, csvname: str, totalsteps: int, reprate: int, pdbname, integrator, system, initsteps: int):
+def md_nvt(simulation, csvname: str, totalsteps: int, reprate: int, pdbname, integrator, system, initsteps: int, initpdb: str, relax_steps: int, relax_report_every: int, no_restraints: bool):
     init_state = simulation.context.getState(getEnergy=True, getPositions=True)
     init_pe = init_state.getPotentialEnergy().value_in_unit(kilocalories_per_mole)
     for temp in range(0, 310, 10):
         integrator.setTemperature(temp*kelvin)
-        simulation.reporters.append(app.StateDataReporter(stdout, 100, step=True, potentialEnergy=True, temperature=True, volume=True))
-        simulation.step(100)
+        simulation.reporters.append(app.StateDataReporter(stdout, 1000, step=True, potentialEnergy=True, temperature=True, volume=True))
+        simulation.step(10000)
     simulation.context.setVelocitiesToTemperature(310*kelvin)
     #simulation.step(496800)
     simulation.step(initsteps)
-    simulation.reporters.append(app.PDBReporter(pdbname, reprate))
+    if not no_restraints:
+        remove_mass_restraints(system, simulation.topology)
+    simulation.reporters.append(app.PDBReporter(initpdb, relax_report_every))
     simulation.reporters.append(app.StateDataReporter(stdout, reprate, step=True, potentialEnergy=True, temperature=True, volume=True))
     prepdf = {'Step':[], 'Potential Energy_kJ/mole':[], 'Temperature_K)':[], 'Box Volume_nm^3':[]}
     inidf = pd.DataFrame(prepdf)
     inidf.to_csv(csvname, index=False)
     simulation.reporters.append(app.StateDataReporter(csvname, reprate, step=True,
         potentialEnergy=True, temperature=True, volume=True, append=True))
+    simulation.step(relax_steps)
+    simulation.reporters.append(app.PDBReporter(pdbname, reprate))
     simulation.step(totalsteps)
     final_state = simulation.context.getState(getEnergy=True, getPositions=True)
     final_pe = final_state.getPotentialEnergy().value_in_unit(kilocalories_per_mole)
@@ -188,7 +224,7 @@ def rmsf_analysis_by_chain(pdb_traj: str, rmsfcsv: str):
         df.to_csv(rmsfout, index=False)
 
 def main():
-    arguments = docopt(__doc__, version='openmmMD_dualmin.py')
+    arguments = docopt(__doc__, version='openmmMD_dualmin_restraint.py')
     #fix PDB input file and impose protonation state to recreate chosen pH 
     pdb_clean = clean_pdb(arguments['--inpdb'], arguments['--pH'])
     pdb = pdb_clean[0]
@@ -217,7 +253,7 @@ def main():
         modeller = setup_modeller(pdb)
         second_iteration = 0
         while second_iteration < max_iterations:
-            min_pdb = energy_minimization(modeller, info_sheet)
+            min_pdb = energy_minimization(modeller, info_sheet, arguments['--no_restraints'])
             outputII = min_pdb[2]
             thresholdII = 0
             if outputII < thresholdII:
@@ -229,14 +265,17 @@ def main():
         simulation = min_pdb[3]
         integrator = min_pdb[4]
         system = min_pdb[5]
+        initpdb = str(stem + pH_str + "_structure_sampling_" + strj + ".pdb")
         csvname = str(stem + pH_str + "_traj" + strj + ".csv")
         pdbname = str(stem + pH_str + "_traj" + strj + ".pdb")
         steps =int(arguments['--steps'])
         report_every = int(arguments['--report_every'])
-        init_steps = int(arguments['--init_steps'])
-        temp_steps = 3100 #total number of steps for heating from 0K to 310K
+        init_steps = int(arguments['--init_steps']) # total unreported step during solvent equilibration/protein restrained
+        temp_steps = 310000 #total number of steps for heating from 0K to 310K
         equil_steps = init_steps - temp_steps
-        sim_run = md_nvt(simulation, csvname, steps, report_every, pdbname, integrator, system, equil_steps)
+        relax_steps = int(arguments["--relax_steps"])
+        relax_report_every = int(arguments['--relax_report_every'])
+        sim_run = md_nvt(simulation, csvname, steps, report_every, pdbname, integrator, system, equil_steps, initpdb, relax_steps, relax_report_every, arguments['--no_restraints'])
         av_energy = sim_run[2]
         with open(info_sheet, 'a') as file:
             file.write(f'Average trajectory potential energy: {av_energy}\n')
@@ -251,6 +290,6 @@ def main():
      
 
 if __name__ == '__main__':
-    arguments = docopt(__doc__, version='openmmMD_dualmin.py')
+    arguments = docopt(__doc__, version='openmmMD_dualmin_restraint.py')
     logging.getLogger().setLevel(logging.INFO)  
     main()

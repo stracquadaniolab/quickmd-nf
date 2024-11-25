@@ -15,6 +15,7 @@ process FindMutations {
     """
     mutant_creator.py --wtin $wtin --varlist $varcsv ${params.find_mut.maker.args}
     """
+    errorStrategy 'ignore'
 }
 
 // original process to setup and execute NVT simulations via OpenMM featuring single mutation variant creation (no step control/report rate control/deparacated)
@@ -87,7 +88,7 @@ process OpenmmMDTuple {
     
     shell:
     """
-    openmmMD_dualmin.py  --inpdb $file --pH $value ${params.pdb.maker.args}
+    openmmMD_dualmin_restraint.py  --inpdb $file --pH $value ${params.pdb.maker.args}
     """
     stub:
     """
@@ -149,6 +150,7 @@ process InterchainPairs {
     touch "${stem}_interchain_pairs.pdb"
     touch "${stem}_average.pdb"
     """
+    errorStrategy 'ignore'
 }
 
 // process to output RMSF graphics with multiple RMSFs (deprecated)
@@ -196,6 +198,7 @@ process PlotRMSFindividualTuple {
         stem="\${filename%.*}"
         touch "${stem}.pdf"
         """
+        errorStrategy 'ignore'
 }
 
 
@@ -270,55 +273,21 @@ workflow MultipleCrossFlow {
     //    .flatten()
     //    .set { inpath_ch }
     inpath_ch = channel.fromPath("${params.inputCEN}")
+    //inpath_ch = channel.fromPath("${params.inputCENSPT}")
     input_pH_ch = channel.of(4.0, 7.4)
     pdb_pH_combinations = inpath_ch.combine(input_pH_ch)
     OpenmmMDTuple(pdb_pH_combinations)
-    OpenmmMDTuple.out.traj_pdb
-        .flatten()
-        .set { individual_files }
-    //OpenmmMDTuple.out.traj_pdb.into { individual_files }
-    //OpenmmMDTuple.out.rmsf_chA.into { rmsf_chA }
-    //OpenmmMDTuple.out.rmsf_chB.into { rmsf_chB }
+    //OpenmmMDTuple.out.traj_pdb
+    //    .flatten()
+    //    .set { individual_files }
     
-    InterchainPairs(individual_files)
-
-    /* // Chain A RMSFs processing
-    def allFiles7pHchA = rmsf_chA.filter { it.name !~ /4.0pH/ }
-    def allFiles4pHchA = rmsf_chA.filter { it.name !~ /7.4pH/ }
-    def otherFiles7pHchA = allFiles7pHchA.filter { it.name !~ /wildtype/ }
-    def otherFiles4pHchA = allFiles4pHchA.filter { it.name !~ /wildtype/ }
-    def wtFile7pHchA = allFiles7pHchA.filter { it.name =~ /wildtype/ }.first()
-    def wtFile4pHchA = allFiles4pHchA.filter { it.name =~ /wildtype/ }.first()
-    
-    otherFiles7pHchA.map { singleFile -> tuple(singleFile, wtFile7pHchA) }
-        .set { filePairs7pHchA }
-    otherFiles4pHchA.map { singleFile -> tuple(singleFile, wtFile4pHchA) }
-        .set { filePairs4pHchA }
-    
-    PlotRMSFindividualTuple(filePairs4pHchA)
-    PlotRMSFindividualTuple(filePairs7pHchA)
-
-    // Chain B RMSFs processing
-    def allFiles7pHchB = rmsf_chB.filter { it.name !~ /4.0pH/ }
-    def allFiles4pHchB = rmsf_chB.filter { it.name !~ /7.4pH/ }
-    def otherFiles7pHchB = allFiles7pHchB.filter { it.name !~ /wildtype/ }
-    def otherFiles4pHchB = allFiles4pHchB.filter { it.name !~ /wildtype/ }
-    def wtFile7pHchB = allFiles7pHchB.filter { it.name =~ /wildtype/ }.first()
-    def wtFile4pHchB = allFiles4pHchB.filter { it.name =~ /wildtype/ }.first()
-    
-    otherFiles7pHchB.map { singleFile -> tuple(singleFile, wtFile7pHchB) }
-        .set { filePairs7pHchB }
-    otherFiles4pHchB.map { singleFile -> tuple(singleFile, wtFile4pHchB) }
-        .set { filePairs4pHchB }
-    
-    PlotRMSFindividualTuple(filePairs4pHchB)
-    PlotRMSFindividualTuple(filePairs7pHchB) */
+    //InterchainPairs(individual_files)
     
 }
 
 
 workflow RmsfFigureProcessing {
-    rmsf_chA = channel.fromPath("${params.inputrmsfA}")
+    def rmsf_chA = Channel.fromPath(params.inputrmsfA)
     // Chain A RMSFs processing
     def allFiles7pHchA = rmsf_chA.filter { it.name !~ /4.0pH/ }
     def allFiles4pHchA = rmsf_chA.filter { it.name !~ /7.4pH/ }

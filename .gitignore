@@ -6,6 +6,7 @@ logs/
 .vscode
 .nextflow*
 results_2024-11-22/
+results_*/
 results-4.0_2024-11-07/
 results-4.0_2024-11-08_75K/
 results-4.0_2024-11-08_old/
