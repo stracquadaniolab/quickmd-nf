@@ -310,8 +310,9 @@ workflow RmsfFigureProcessing {
 // workflow to calculate RMSFs independently
 workflow Rmsf_calc {
     inpath_ch = channel.fromPath("${params.inputtraj}")
+    InterchainPairs(inpath_ch)
     //Rmsf_Bio3d(inpath_ch)
-    Rmsf_mda(inpath_ch)
+    //Rmsf_mda(inpath_ch)
 }
 
 workflow {

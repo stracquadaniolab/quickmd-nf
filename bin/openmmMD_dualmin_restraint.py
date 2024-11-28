@@ -95,18 +95,34 @@ def setup_pdbfile(pdbfile):
     pdb = app.PDBFile(pdbfile)
     return pdb
 
-# instate resraints on backbone atoms via rendering backbone massless
+# instate mass-based resraints on backbone atoms via rendering backbone massless
 def apply_mass_restraints(system, topology):
     for atom in topology.atoms():
         if atom.name in ["CA", "C", "N"]:
             system.setParticleMass(atom.index, 0)
 
-# disengage restraints on backbone atoms via reinstating default atomic mass
+# disengage mass-based restraints on backbone atoms via reinstating default atomic mass
 def remove_mass_restraints(system, topology):
     for atom in topology.atoms():
         if atom.name in ["CA", "C", "N"]:
             element_mass = element.Element.getBySymbol(atom.element.symbol).mass
             system.setParticleMass(atom.index, element_mass)
+
+# instate force-based restraints 
+def apply_force_restraints(system, topology):
+    restraint_force = mm.CustomExternalForce('0.5 * k * ((x-x0)^2 + (y-y0)^2 + (z-z0)^2)')
+    restraint_force.addGlobalParameter('k', 1000.0)  # strength of restraint
+    restraint_force.addPerParticleParameter('x0')
+    restraint_force.addPerParticleParameter('y0')
+    restraint_force.addPerParticleParameter('z0')
+    for atom in topology.atoms():
+        if atom.name in ["CA", "C", "N"]:
+            pos = topology.positions[atom.index]
+            restraint_force.addParticle(atom.index, [pos.x, pos.y, pos.z])
+    system.addForce(restraint_force)
+
+def remove_force_restraints():
+    restraint_force.setGlobalParameterDefaultValue(0, 0.0)
 
 
 # integrate modeller and forcefied into a defined system. Before integration, solvent molecules are added to the box, with box vectors defined such that water density at a given pressure (normally standard pressure of 1atm) can be simulated. Padding is added, with excess molecules removed to achieve 1atm density
@@ -149,7 +165,8 @@ def energy_minimization(modeller, info_sheet, no_restraints: bool):
     yvec = mm.Vec3(0.0, 11.70, 0.0)
     zvec = mm.Vec3(0.0, 0.0, 11.70)
     if not no_restraints:
-        apply_mass_restraints(system, modeller.topology)
+        apply_force_restraints(system, modeller.topology)
+        #apply_mass_restraints(system, modeller.topology)
     simulation = setup_simulation(modeller, system)[0]
     integrator = setup_simulation(modeller, system)[1]
     simulation.context.setPeriodicBoxVectors(xvec,yvec,zvec)
@@ -183,7 +200,8 @@ def md_nvt(simulation, csvname: str, totalsteps: int, reprate: int, pdbname, int
     #simulation.step(496800)
     simulation.step(initsteps)
     if not no_restraints:
-        remove_mass_restraints(system, simulation.topology)
+        remove_force_restraints()
+        #remove_mass_restraints(system, simulation.topology)
     simulation.reporters.append(app.PDBReporter(initpdb, relax_report_every))
     simulation.reporters.append(app.StateDataReporter(stdout, reprate, step=True, potentialEnergy=True, temperature=True, volume=True))
     prepdf = {'Step':[], 'Potential Energy_kJ/mole':[], 'Temperature_K)':[], 'Box Volume_nm^3':[]}
@@ -203,12 +221,6 @@ def md_nvt(simulation, csvname: str, totalsteps: int, reprate: int, pdbname, int
 # output rmsf per residue per chain based on generated PDB trajectory 
 def rmsf_analysis_by_chain(pdb_traj: str, rmsfcsv: str):
     u = mda.Universe(pdb_traj)
-    #ag = u.atoms
-    #new_dimensions = [117, 117, 117, 90, 90, 90]
-    #set_dim = transformations.boxdimensions.set_dimensions(new_dimensions)
-    #transform = transformations.unwrap(ag)
-    #center = transformations.center_in_box(ag.select_atoms('protein'), wrap=True)
-    #u.trajectory.add_transformations(set_dim, transform, center)
     chain_ids = np.unique(u.select_atoms('protein').atoms.chainIDs)
     for chain_id in chain_ids:
         chain = u.select_atoms(f'protein and chainID {chain_id}')
