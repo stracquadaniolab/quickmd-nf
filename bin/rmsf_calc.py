@@ -43,12 +43,12 @@ def rmsf_analysis(pdb_traj: str, rmsfcsv: str):
 
 def rmsf_analysis_by_chain(pdb_traj: str, rmsfcsv: str):
     u = mda.Universe(pdb_traj)
-    ag = u.atoms
-    new_dimensions = [117, 117, 117, 90, 90, 90]
-    set_dim = transformations.boxdimensions.set_dimensions(new_dimensions)
-    transform = transformations.unwrap(ag)
-    center = transformations.center_in_box(ag.select_atoms('protein'), wrap=True)
-    u.trajectory.add_transformations(set_dim, transform, center)
+    #ag = u.atoms
+    #new_dimensions = [117, 117, 117, 90, 90, 90]
+    #set_dim = transformations.boxdimensions.set_dimensions(new_dimensions)
+    #transform = transformations.unwrap(ag)
+    #center = transformations.center_in_box(ag.select_atoms('protein'), wrap=True)
+    #u.trajectory.add_transformations(set_dim, transform, center)
     chain_ids = np.unique(u.select_atoms('protein').atoms.chainIDs)
     for chain_id in chain_ids:
         chain = u.select_atoms(f'protein and chainID {chain_id}')

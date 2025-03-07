@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""openmmMD_dualmin_restraint
+"""openmmMD_dualmin_restraint_NPT
 
 Minimise the potential energy of the wildtype protein structure and mutated variants, according to AMBER14 potentials 
 Usage:
-openmmMD_dualmin_restraint.py [--inpdb=<pdb>] [--pH=<pH>] [--steps=<steps>] [--report_every=<report_every>] [--init_steps=<init_steps>] [--relax_steps=<relax_steps>] [--relax_report_every=<relax_report_every>] [--no_restraints] [--salting=<salting>] [--test_conditions]
+openmmMD_dualmin_restraint_NPT.py [--inpdb=<pdb>] [--pH=<pH>] [--steps=<steps>] [--report_every=<report_every>] [--init_steps=<init_steps>] [--relax_steps=<relax_steps>] [--relax_report_every=<relax_report_every>] [--no_restraints] [--salting=<salting>] [--test_conditions]
 
 Options:
 --inpdb=<pdb>                               Input PDB file of protein as obtained from previous process
@@ -155,8 +155,128 @@ def setup_system(modeller, forcefield, solvmol: str, padding: int, salting=None)
     system = forcefield.createSystem(modeller.topology, nonbondedMethod=app.PME, nonbondedCutoff=1.0*nanometer, constraints=app.HBonds)
     return system
 
+# similar to the above, integrate modeller and forcefied into a defined system. Before integration, solvent molecules are added to the box, with box vectors defined such that water density at a given pressure (normally standard pressure of 1atm) can be simulated. Padding is added. Differently to the above, excess molecules removed proportionally, be they water or ion, to achieve 1atm density, with random selection to avoid density "holes"
+def setup_system_proportional(modeller, forcefield, solvmol: str, padding: int, info_sheet,  salting=None):
+    Nmol=int(solvmol)
+    xvec = mm.Vec3(11.70, 0.0, 0.0)
+    yvec = mm.Vec3(0.0, 11.70, 0.0)
+    zvec = mm.Vec3(0.0, 0.0, 11.70)
+    modeller.topology.setPeriodicBoxVectors((xvec,yvec,zvec))
+    padding = padding * nanometer
+    if salting:
+        ion_conc = float(salting) * molar
+        modeller.addSolvent(forcefield, padding=padding, ionicStrength=ion_conc)
+    else:
+        modeller.addSolvent(forcefield, padding=padding)
+    # count up how much solvent we currently have
+    # count up waters
+    current_water = 0
+    current_na = 0
+    current_cl = 0
+
+    for res in modeller.topology.residues():
+        if res.name == 'HOH':
+            current_water += 1
+        elif res.name == 'NA':
+            current_na += 1
+        elif res.name == 'CL':
+            current_cl += 1
+
+    print('current water', current_water)
+    print('current na', current_na)
+    print('current cl', current_cl)
+    current_total_solvent = current_water + current_na + current_cl
+    # calculate the total number of counter ions balancing the protonation state (there should be slightly more Na+ than Cl- above pH 7 and the opposite below so we'll take the absolute amount) and therefore how much overall neutral solvent remains after these neutral ions are factored in. This will help us also determine the amount of target neutral solvent after removing excess:
+    ion_imbalance = abs(current_cl - current_na)
+    print('ion imbalance', ion_imbalance)
+    current_neutral_solvent = current_total_solvent - ion_imbalance
+    print('neutral solvent', current_neutral_solvent)
+    target_neutral_solvent = Nmol - ion_imbalance
+    print(' target ', target_neutral_solvent)
+    excess_solvent = current_neutral_solvent - target_neutral_solvent
+    print("excess" , excess_solvent)
+    # now, work out the fraction of the neutral solvent that is water and that which is ions. We will use the lower ion score of the two to exclude the counter ions from the proportions. We'll then gather up our residues and randomly select those to delete 
+    if excess_solvent > 0:
+        water_fraction = current_water/current_neutral_solvent
+        print('water fraction', water_fraction)
+        target_water = round(target_neutral_solvent * water_fraction)
+        print('target water', target_water)
+        remove_water = current_water - target_water
+    if current_cl > current_na:
+        ion_fraction = current_na/current_neutral_solvent
+        target_ions = round(target_neutral_solvent * ion_fraction)
+        remove_ions = current_na - target_ions
+    else:
+        ion_fraction = current_cl/current_neutral_solvent
+        target_ions = round(target_neutral_solvent * ion_fraction)
+        remove_ions = current_cl - target_ions
+    print('ion fraction', ion_fraction)
+    print('remove ion', remove_ions)
+    calculated_solvent = ion_imbalance + target_water + (2*target_ions) 
+    #calculated_solvent = ion_imbalance + current_neutral_solvent - (2*remove_ions) - remove_water
+    remaining_diff = calculated_solvent - Nmol
+    #if there is any difference due to rounding, we add or subtract a single water molecule, it should have little bearing on the overall concentration 
+    if remaining_diff != 0:
+        remove_water_updated = remove_water + remaining_diff
+    else:
+        remove_water_updated = remove_water
+    water_residues = [res for res in modeller.topology.residues() if res.name == 'HOH']
+    na_residues = [res for res in modeller.topology.residues() if res.name == 'NA']
+    cl_residues = [res for res in modeller.topology.residues() if res.name == 'CL']
+    na_check = len(na_residues)
+
+    to_remove_total = []
+    if remove_water > 0:
+        to_remove_water = np.random.choice(water_residues, remove_water_updated, replace=False)
+        to_remove_total.extend(to_remove_water)
+        #modeller.delete(to_remove_water)
+    if remove_ions > 0:
+        to_remove_na = np.random.choice(na_residues, remove_ions, replace=False)
+        to_remove_total.extend(to_remove_na)
+        to_remove_cl = np.random.choice(cl_residues, remove_ions, replace=False)
+        to_remove_total.extend(to_remove_cl)
+    #    modeller.delete(to_remove_cl)
+    #to_remove_na = np.random.choice(na_residues, remove_ions, replace=False)
+    #modeller.delete(to_remove_na)
+    modeller.delete(to_remove_total)
+    remove_na = len(to_remove_na)
+    #to_remove_cl = np.random.choice(cl_residues, remove_ions, replace=False)
+    #modeller.delete(to_remove_cl)
+    final_water_count = sum([1 for res in modeller.topology.residues() if res.name == 'HOH'])
+    print('final water', final_water_count)
+    final_na_count = sum([1 for res in modeller.topology.residues() if res.name == 'NA'])
+    print('final na', final_na_count)
+    final_cl_count = sum([1 for res in modeller.topology.residues() if res.name == 'CL'])
+    print( 'final cl', final_cl_count)
+    final_solvent_count = final_water_count + final_na_count + final_cl_count
+    print(final_solvent_count)
+    with open(info_sheet, 'a') as file:
+        file.write(f'original water total: {current_water}\n')
+        file.write(f'original Na total: {current_na}\n')
+        file.write(f'original Cl total: {current_cl}\n')
+        file.write(f'original total solvent: {current_total_solvent}\n')
+        file.write(f'ion imbalance: {ion_imbalance}\n')
+        file.write(f'original neutral solvent: {current_neutral_solvent}\n')
+        file.write(f'target neutral solvent: {target_neutral_solvent}\n')
+        file.write(f'excess solvent: {excess_solvent}\n')
+        file.write(f'water fraction: {water_fraction}\n')
+        file.write(f'water molecules to remove: {remove_water}\n')
+        file.write(f'water molecules to remove after correction: {remove_water_updated}\n')
+        file.write(f'ion fraction: {ion_fraction}\n')
+        file.write(f'ions to remove: {remove_ions}\n')
+        file.write(f'Na check: {na_check}\n')
+        file.write(f'final water total: {final_water_count}\n')
+        file.write(f'remove Na: {remove_na}\n')
+        file.write(f'final Cl count {final_cl_count}\n')
+        file.write(f'final total solvent: {final_solvent_count}\n')
+    # to check we got 50000 solvent molecules back (50,001 or 49999 due to rounding errors is fine)
+   
+    system = forcefield.createSystem(modeller.topology, nonbondedMethod=app.PME, nonbondedCutoff=1.0*nanometer, constraints=app.HBonds)
+    return system
+
 # define simulation parameter and simulation.context, combining modeller and system, and setting integrator 
 def setup_simulation(modeller, system):
+    system.addForce(mm.MonteCarloBarostat(1*bar, 300*kelvin))
     integrator = mm.LangevinMiddleIntegrator(310*kelvin, 1/picosecond, 0.001*picoseconds)
     simulation = app.Simulation(modeller.topology, system, integrator)
     simulation.context.setPositions(modeller.positions)
@@ -168,7 +288,7 @@ def energy_minimization(modeller, info_sheet, no_restraints: bool, salting=None)
     solvmol = 50000
     padding = 1 #nanometer
     if salting:
-        system = setup_system(modeller, forcefield, solvmol, padding, salting)
+        system = setup_system_proportional(modeller, forcefield, solvmol, padding, info_sheet, salting)
     else:
         system = setup_system(modeller, forcefield, solvmol, padding)
     xvec = mm.Vec3(11.70, 0.0, 0.0)
@@ -246,7 +366,7 @@ def rmsf_analysis_by_chain(pdb_traj: str, rmsfcsv: str):
         df.to_csv(rmsfout, index=False)
 
 def main():
-    arguments = docopt(__doc__, version='openmmMD_dualmin_restraint.py')
+    arguments = docopt(__doc__, version='openmmMD_dualmin_restraint_NPT.py')
     #fix PDB input file and impose protonation state to recreate chosen pH 
     pdb_clean = clean_pdb(arguments['--inpdb'], arguments['--pH'])
     pdb = pdb_clean[0]
@@ -321,6 +441,6 @@ def main():
      
 
 if __name__ == '__main__':
-    arguments = docopt(__doc__, version='openmmMD_dualmin_restraint.py')
+    arguments = docopt(__doc__, version='openmmMD_dualmin_restraint_NPT.py')
     logging.getLogger().setLevel(logging.INFO)  
     main()

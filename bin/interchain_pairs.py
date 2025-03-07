@@ -27,9 +27,9 @@ def average_trajectory(pdb: str, pdbout: str):
     ag = u.atoms
     new_dimensions = [117.0, 117.0, 117.0, 90, 90, 90]
     set_dim = transformations.boxdimensions.set_dimensions(new_dimensions)
-    transform = transformations.unwrap(ag)
+    #transform = transformations.unwrap(ag)
     center = transformations.center_in_box(ag.select_atoms('protein'), wrap=True)
-    u.trajectory.add_transformations(set_dim, transform, center)
+    u.trajectory.add_transformations(set_dim, center)
     protein = u.select_atoms("protein")
     avg_universe = mda.Merge(protein)
     avg_universe.add_TopologyAttr('tempfactors')
@@ -98,7 +98,7 @@ def main():
     pdbout = str(pdbstem + "_average.pdb") 
     csvout = str(pdbstem + "_interchain_pairs.csv")
     average_trajectory(pdb, pdbout)
-    threshold = 15.0
+    threshold = 20.0
     out = get_contact_atoms(pdbout, threshold)
     node_pairs = out[0]
     node_pairs_df = pd.DataFrame(node_pairs, columns=['Atom1', 'Atom2', 'Distance'])

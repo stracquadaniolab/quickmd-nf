@@ -70,13 +70,13 @@ process OpenmmMDNoCreate {
 
 // process accepting variant/pH tuple to setup and execute NVT simulations via OpenMM, for multiple pHs/protonation states with  steps/reporting rate definable in command line arguments. Sampling of protein-in-vacuo energetic state to find minimum energy, with conditional solution optimisation to ensure simulation stability. Protein solvated with 50,000 water molecules, approximating density at 1atm. PDB trajectory outputted, along with chain-by-chain RMSF analysis performed with MDAnalysis
 process OpenmmMDTuple {
-    publishDir "${params.resultsDir}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*_fixed.pdb", mode: 'copy'
-    publishDir "${params.resultsDir}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*vac_min.pdb", mode: 'copy'
-    publishDir "${params.resultsDir}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*_minimised.pdb", mode: 'copy'
-    publishDir "${params.resultsDir}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*traj*", mode: 'copy'
-    publishDir "${params.resultsDir}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*initial*", mode: 'copy'
-    publishDir "${params.resultsDir}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*rmsf*.csv", mode: 'copy'
-    publishDir "${params.resultsDir}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*.txt", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*_fixed.pdb", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*vac_min.pdb", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*_minimised.pdb", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*traj*", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*initial*", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*rmsf*.csv", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*.txt", mode: 'copy'
     input:
         tuple path(file), val(value)
     output:
@@ -90,6 +90,9 @@ process OpenmmMDTuple {
     """
     openmmMD_dualmin_restraint.py  --inpdb $file --pH $value ${params.pdb.maker.args}
     """
+
+    errorStrategy 'ignore'
+
     stub:
     """
     filename=\$(basename "$file")
@@ -104,7 +107,145 @@ process OpenmmMDTuple {
     touch "${stem}_${value}_rmsf_chA.csv"
     touch "${stem}_${value}_rmsf_csv.csv"
     """
+    errorStrategy 'ignore'
 }
+
+
+// process accepting variant/pH/salting tuple to setup and execute NVT simulations via OpenMM, for multiple pHs/protonation states with  steps/reporting rate definable in command line arguments. Sampling of protein-in-vacuo energetic state to find minimum energy, with conditional solution optimisation to ensure simulation stability. Protein solvated with 50,000 water molecules, approximating density at 1atm. PDB trajectory outputted, along with chain-by-chain RMSF analysis performed with MDAnalysis
+process OpenmmMDTupleSalting {
+    publishDir "${params.resultsDir}_${params.total_length}_${params.salting}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*_fixed.pdb", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${params.salting}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*vac_min.pdb", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${params.salting}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*_minimised.pdb", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${params.salting}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*traj*", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${params.salting}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*rmsf*.csv", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${params.salting}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*.txt", mode: 'copy'
+    input:
+        tuple path(file), val(value), val(salt)
+    output:
+        path "*_fixed.pdb", emit: fixed_pdbs
+        path '*traj*.pdb', emit: traj_pdb
+        path '*traj*.csv', emit: traj_csv
+        path '*rmsf_chA*', emit: rmsf_chA
+        path '*rmsf_chB*', emit: rmsf_chB
+        path '*_minimised.pdb'
+        path '*vac_min.pdb'
+        path '*.txt'
+    
+    errorStrategy 'ignore'
+
+    shell:
+    """
+    openmmMD_dualmin_restraint.py  --inpdb $file --pH $value ${params.pdb.maker.args} --salting $salt
+    """
+
+    stub:
+    """
+    filename=\$(basename "$file")
+    stem="\${filename%.*}"
+    touch "${stem}_${value}_fixed.pdb"
+    touch "${stem}_${value}_vac_min.pdb"
+    touch "${stem}_${value}_minimised.pdb"
+    touch "${stem}_${value}_initial1.pdb"
+    touch "${stem}_${value}_info_sheet.txt"
+    touch "${stem}_${value}_traj1.pdb"
+    touch "${stem}_${value}_traj1.csv"
+    touch "${stem}_${value}_rmsf_chA.csv"
+    touch "${stem}_${value}_rmsf_csv.csv"
+    """
+    errorStrategy 'ignore'
+}
+
+// process accepting variant/pH/salting tuple to setup and execute NVT simulations via OpenMM, for multiple pHs/protonation states with  steps/reporting rate definable in command line arguments. Sampling of protein-in-vacuo energetic state to find minimum energy, with conditional solution optimisation to ensure simulation stability. Protein solvated with 50,000 water molecules, approximating density at 1atm. PDB trajectory outputted, along with chain-by-chain RMSF analysis performed with MDAnalysis
+process OpenmmMDTuplePHSaltingGroup {
+    publishDir "${params.resultsDir}_${params.total_length}_${params.salting}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*_fixed.pdb", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${params.salting}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*vac_min.pdb", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${params.salting}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*_minimised.pdb", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${params.salting}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*traj*", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${params.salting}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*rmsf*.csv", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${params.salting}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*.txt", mode: 'copy'
+    input:
+        tuple path(file), val(group)
+    output:
+        path "*_fixed.pdb", emit: fixed_pdbs
+        path '*traj*.pdb', emit: traj_pdb
+        path '*traj*.csv', emit: traj_csv
+        path '*rmsf_chA*', emit: rmsf_chA
+        path '*rmsf_chB*', emit: rmsf_chB
+        path '*_minimised.pdb'
+        path '*vac_min.pdb'
+        path '*.txt'
+    
+    // errorStrategy 'ignore'
+
+    shell:
+    """
+    value = $group[0]
+    salt = $group[1]
+    openmmMD_dualmin_restraint.py  --inpdb $file --pH $value ${params.pdb.maker.args} --salting $salt
+    """
+
+    stub:
+    """
+    filename=\$(basename "$file")
+    stem="\${filename%.*}"
+    touch "${stem}_${value}_fixed.pdb"
+    touch "${stem}_${value}_vac_min.pdb"
+    touch "${stem}_${value}_minimised.pdb"
+    touch "${stem}_${value}_initial1.pdb"
+    touch "${stem}_${value}_info_sheet.txt"
+    touch "${stem}_${value}_traj1.pdb"
+    touch "${stem}_${value}_traj1.csv"
+    touch "${stem}_${value}_rmsf_chA.csv"
+    touch "${stem}_${value}_rmsf_csv.csv"
+    """
+    errorStrategy 'ignore'
+}
+
+
+// process accepting variant/pH/salting tuple to setup and execute NPT simulations via OpenMM, for multiple pHs/protonation states with  steps/reporting rate definable in command line arguments. Sampling of protein-in-vacuo energetic state to find minimum energy, with conditional solution optimisation to ensure simulation stability. Protein solvated with 50,000 water molecules, approximating density at 1atm. PDB trajectory outputted, along with chain-by-chain RMSF analysis performed with MDAnalysis
+process OpenmmMDTupleSaltingNPT {
+    publishDir "${params.resultsDir}_${params.total_length}_${params.salting}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*_fixed.pdb", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${params.salting}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*vac_min.pdb", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${params.salting}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*_minimised.pdb", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${params.salting}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*traj*", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${params.salting}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*rmsf*.csv", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${params.salting}_${new Date().format('yyyy-MM-dd')}/openmm-md/", pattern: "*.txt", mode: 'copy'
+    input:
+        tuple path(file), val(value), val(salt)
+    output:
+        path "*_fixed.pdb", emit: fixed_pdbs
+        path '*traj*.pdb', emit: traj_pdb
+        path '*traj*.csv', emit: traj_csv
+        path '*rmsf_chA*', emit: rmsf_chA
+        path '*rmsf_chB*', emit: rmsf_chB
+        path '*_minimised.pdb'
+        path '*vac_min.pdb'
+        path '*.txt'
+    
+    // errorStrategy 'ignore'
+
+    shell:
+    """
+    openmmMD_dualmin_restraint_NPT.py  --inpdb $file --pH $value ${params.pdb.maker.args} --salting $salt
+    """
+
+    stub:
+    """
+    filename=\$(basename "$file")
+    stem="\${filename%.*}"
+    touch "${stem}_${value}_fixed.pdb"
+    touch "${stem}_${value}_vac_min.pdb"
+    touch "${stem}_${value}_minimised.pdb"
+    touch "${stem}_${value}_initial1.pdb"
+    touch "${stem}_${value}_info_sheet.txt"
+    touch "${stem}_${value}_traj1.pdb"
+    touch "${stem}_${value}_traj1.csv"
+    touch "${stem}_${value}_rmsf_chA.csv"
+    touch "${stem}_${value}_rmsf_csv.csv"
+    """
+    errorStrategy 'ignore'
+}
+
 
 // deprecated wildtype-only version of OpenmmMDNoCreate
 process OpenmmMDNoCreateWT {
@@ -132,8 +273,8 @@ process OpenmmMDNoCreateWT {
 
 // process measuring the average interchain distances between residues in the respective A and B chains to predict strength of hydrogen bonding in the protein secondary structure or drift caused by polar solvent
 process InterchainPairs {
-    publishDir "${params.resultsDir}_${new Date().format('yyyy-MM-dd')}/interchain_pairs_all_pH/", pattern: "*_interchain_pairs.pdb", mode: 'copy'
-    publishDir "${params.resultsDir}_${new Date().format('yyyy-MM-dd')}/interchain_pairs_all_pH/", pattern: "*_average.pdb", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${new Date().format('yyyy-MM-dd')}/interchain_pairs_all_pH/", pattern: "*_interchain_pairs.pdb", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${new Date().format('yyyy-MM-dd')}/interchain_pairs_all_pH/", pattern: "*_average.pdb", mode: 'copy'
     input:
         path inpdb 
     output:
@@ -183,7 +324,7 @@ process PlotRMSFindividual {
 
 // process to compare variant RMSFs to wildtype, designed to deal with full set of data for given chain/pH
 process PlotRMSFindividualTuple {
-    publishDir "${params.resultsDir}-${params.pdb.maker.args}_${new Date().format('yyyy-MM-dd')}/plot_RMSF/", pattern: "*.pdf", mode: 'copy'
+    publishDir "${params.resultsDir}_${params.total_length}_${new Date().format('yyyy-MM-dd')}/plot_RMSF/", pattern: "*.pdf", mode: 'copy'
     input:
         tuple path incsv, path wtcsv
     output:
@@ -274,9 +415,17 @@ workflow MultipleCrossFlow {
     //    .set { inpath_ch }
     inpath_ch = channel.fromPath("${params.inputCEN}")
     //inpath_ch = channel.fromPath("${params.inputCENSPT}")
-    input_pH_ch = channel.of(4.0, 7.4)
-    pdb_pH_combinations = inpath_ch.combine(input_pH_ch)
-    OpenmmMDTuple(pdb_pH_combinations)
+    //input_pH_ch = channel.of(4.6, 7.4)
+    //input_salting_ch = channel.of(0.0935, 0.1817)
+    //input_pH_salting_ch = input_pH_ch.cross(input_salting_ch)
+    input_pH_salting_ch = channel.of([4.6, 0.0935], [7.4, 0.1817])
+    //pdb_pH_combinations = inpath_ch.combine(input_pH_ch)
+    //pdb_pH_salting_combinations = pdb_pH_combinations.combine(input_salting_ch)
+    pdb_pH_salting_combinations = inpath_ch.combine(input_pH_salting_ch)
+    //OpenmmMDTuple(pdb_pH_combinations)
+    //OpenmmMDTupleSalting(pdb_pH_salting_combinations)
+    OpenmmMDTupleSaltingNPT(pdb_pH_salting_combinations)
+    //OpenmmMDTuplePHSaltingGroup(pdb_pH_salting_combinations)
     //OpenmmMDTuple.out.traj_pdb
     //    .flatten()
     //    .set { individual_files }
@@ -310,14 +459,14 @@ workflow RmsfFigureProcessing {
 // workflow to calculate RMSFs independently
 workflow Rmsf_calc {
     inpath_ch = channel.fromPath("${params.inputtraj}")
-    InterchainPairs(inpath_ch)
+    //InterchainPairs(inpath_ch)
     //Rmsf_Bio3d(inpath_ch)
-    //Rmsf_mda(inpath_ch)
+    Rmsf_mda(inpath_ch)
 }
 
 workflow {
 //    MutantMakerFlow()
 //    Rmsf_calc()
 //    CollectRMSFsFlow()
-MultipleCrossFlow()
+    MultipleCrossFlow()
 }
